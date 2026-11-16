@@ -114,6 +114,7 @@ def run_command(
     if backend == "bwrap" and shutil.which("bwrap"):
         argv = [
             "bwrap",
+            "--ro-bind", "/", "/",
             "--bind", effective_cwd, effective_cwd,
             "--dev", "/dev",
             "--proc", "/proc",
@@ -161,6 +162,7 @@ def _run(argv, cwd, env, timeout, start, shell):
 def _make_preexec():
     def pre():
         try:
+            os.setpgrp()  # own process group so timeouts kill only the child tree
             resource.setrlimit(resource.RLIMIT_CPU, (300, 300))
             resource.setrlimit(resource.RLIMIT_FSIZE, (OUTPUT_CAP, OUTPUT_CAP))
             resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
