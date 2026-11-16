@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from typing import Callable
 
-from dsc.tools import files, shell
+from dsc.tools import files, shell, todo, web
 
 TOOL_OUTPUT_MAX = files.TOOL_OUTPUT_MAX
+VALID_STATUS = todo.VALID_STATUS
 
 
 def _schema(desc: str, props: dict, required: list) -> dict:
@@ -88,6 +89,43 @@ SCHEMAS: dict[str, dict] = {
         },
         ["command"],
     ),
+    "web_fetch": _schema(
+        "Fetch a web page over http(s), strip HTML, return title + text "
+        "(capped). Local/private addresses are blocked.",
+        {"url": {"type": "string"}, "max_chars": {"type": "integer", "default": 20000}},
+        ["url"],
+    ),
+    "web_search": _schema(
+        "Web search via DuckDuckGo (no API key). Returns result titles/URLs "
+        "with snippets.",
+        {"query": {"type": "string"}, "max_results": {"type": "integer", "default": 5}},
+        ["query"],
+    ),
+    "todo_write": _schema(
+        "Replace the task todo list wholesale. Each todo: {content, status: "
+        "pending|in_progress|completed}. Keep exactly one in_progress.",
+        {
+            "todos": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string"},
+                        "status": {"type": "string", "enum": list(VALID_STATUS)},
+                    },
+                    "required": ["content"],
+                },
+            }
+        },
+        ["todos"],
+    ),
+    "search_agent": _schema(
+        "Delegate codebase exploration to a nested read-only subagent. Use "
+        "when you need to explore without filling your context. Returns a "
+        "short answer + list of files consulted.",
+        {"question": {"type": "string"}},
+        ["question"],
+    ),
 }
 
 HANDLERS: dict[str, Callable[..., str]] = {
@@ -98,11 +136,15 @@ HANDLERS: dict[str, Callable[..., str]] = {
     "glob": files.glob,
     "grep": files.grep,
     "bash": shell.bash,
+    "web_fetch": web.web_fetch,
+    "web_search": web.web_search,
+    "todo_write": todo.todo_write,
+    "search_agent": files.search_agent,
 }
 
 # tools that mutate state (used by permissions + plan mode)
 WRITE_TOOLS = {"write_file", "edit_file", "bash", "web_fetch", "web_search", "todo_write"}
-READ_ONLY_TOOLS = {"read_file", "list_dir", "glob", "grep"}
+READ_ONLY_TOOLS = {"read_file", "list_dir", "glob", "grep", "search_agent"}
 
 
 def tool_schemas(names: list[str]) -> list[dict]:
@@ -127,7 +169,7 @@ def dispatch(name: str, ctx: dict, args: dict) -> str:
     merged.update(
         {
             k: ctx[k]
-            for k in ("ws", "mode", "cache", "backend", "allow_network", "cfg")
+            for k in ("ws", "mode", "cache", "backend", "allow_network", "cfg", "state")
             if k in ctx
         }
     )

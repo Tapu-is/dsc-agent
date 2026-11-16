@@ -308,3 +308,51 @@ def _iter_files(root: Path):
                     stack.append(e)
                 continue
             yield e
+
+
+def search_agent(ws: Path, cfg=None, **args) -> str:
+    """search_agent(question) — nested read-only exploration loop.
+
+    Runs a bounded sub-loop with only read_file/grep/glob and returns a
+    short answer plus the files consulted. Keeps the main context clean.
+    """
+    if cfg is None:
+        return "error: search_agent unavailable (no client config)"
+    question = str(args.get("question", "")).strip()
+    if not question:
+        return "error: search_agent requires a question"
+
+    from dsc.client import ChatClient, ClientError
+    from dsc.loop import run as loop_run
+
+    client = ChatClient(cfg)
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a read-only code exploration subagent. Answer the "
+                    "question using read_file/grep/glob only. Reply with a "
+                    "concise answer (max 200 words) and a list of the files "
+                    "you consulted. Do not modify anything."
+                ),
+            },
+            {"role": "user", "content": f"Workspace: {ws}\nQuestion: {question}"},
+        ]
+        sub_ctx = {
+            "ws": str(ws),
+            "workspace": str(ws),
+            "mode": "plan",
+            "cache": {},
+            "tool_names": ["read_file", "grep", "glob", "list_dir"],
+        }
+        result = loop_run(client, messages, sub_ctx, max_turns=8)
+        if not result.content:
+            return f"search_agent found nothing (reason: {result.reason})"
+        return result.content
+    except ClientError as e:
+        return f"error: search_agent API call failed: {e}"
+    except Exception as e:
+        return f"error: search_agent crashed: {type(e).__name__}: {e}"
+    finally:
+        client.close()
