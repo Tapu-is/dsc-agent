@@ -76,5 +76,16 @@ class TestRunCommand:
 
     def test_backend_bwrap_if_present(self, tmp_path: Path):
         backend = detect_sandbox("auto")
-        code, out, _ = run_command("echo bw", str(tmp_path), backend=backend)
-        assert code == 0 and "bw" in out
+        if backend != "bwrap":
+            code, out, _ = run_command("echo bw", str(tmp_path), backend=backend)
+            assert code == 0 and "bw" in out
+            return
+        # some setups can't bind /tmp; use a repo-local workspace
+        ws = Path(__file__).parent.parent / ".tmpbwrap-ws"
+        ws.mkdir(exist_ok=True)
+        try:
+            code, out, _ = run_command("echo bw", str(ws), backend="bwrap")
+            assert code == 0 and "bw" in out
+        finally:
+            import shutil
+            shutil.rmtree(ws, ignore_errors=True)
