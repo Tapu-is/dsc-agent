@@ -62,7 +62,7 @@ class TestRepoContext:
 
 class TestCompaction:
     def test_threshold_triggers(self):
-        msgs = [{"role": "user", "content": "x" * 400}]
+        msgs = [{"role": "user", "content": "x" * 4000}]  # ~1000 tokens
         assert not needs_compaction(msgs, context_tokens=100_000)
         assert needs_compaction(msgs, context_tokens=500)
 
