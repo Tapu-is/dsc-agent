@@ -19,7 +19,7 @@ from dsc.context import (
     repo_context,
     COMPACT_THRESHOLD,
 )
-from dsc.loop import ToolCallRecord, run, summarize_call
+from dsc.loop import ToolCallRecord, run as run_loop, summarize_call
 from dsc.permissions import Permission
 from dsc.sandbox import detect_sandbox, set_notice_fn
 from dsc.session import Session
@@ -178,7 +178,7 @@ def execute_task(
         session.log_tool(rec.name, rec.args, rec.output, rec.duration_s)
 
     try:
-        result = run(
+        result = run_loop(
             client,
             messages,
             ctx,
@@ -237,6 +237,42 @@ def _read_prompt() -> str:
     return "".join(parts)
 
 
+def ensure_api_key(cfg: Config, ui: "UI", interactive: Optional[bool] = None) -> bool:
+    """Interactively ask for the API key if none is configured.
+
+    Asks once (hidden input), offers to save it to config.toml.
+    Returns True if cfg.api_key is usable afterwards.
+    """
+    if cfg.api_key:
+        return True
+    if interactive is None:
+        interactive = sys.stdin.isatty()
+    if not interactive:
+        return False
+    import getpass
+
+    print(ui._c(C_YELLOW, "No API key configured."), file=sys.stderr)
+    try:
+        key = getpass.getpass("Enter DeepSeek API key (hidden, Enter to skip): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if not key:
+        return False
+    cfg.api_key = key
+    try:
+        save = input("Save this key to ~/.config/dsc/config.toml? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        save = "n"
+    if save in ("y", "yes"):
+        from dsc.config import save_config_value
+
+        if save_config_value("api_key", key):
+            ui.info("key saved to ~/.config/dsc/config.toml")
+        else:
+            ui.warn("could not write config.toml; key applies to this run only")
+    return True
+
+
 def run(cfg: Config, ns) -> int:
     if getattr(ns, "ping", False):
         try:
@@ -250,6 +286,12 @@ def run(cfg: Config, ns) -> int:
         return 0
 
     ui = UI(no_color=cfg.no_color)
+    if not ensure_api_key(cfg, ui):
+        ui.warn(
+            "no API key: set DEEPSEEK_API_KEY, or re-run in a terminal to "
+            "enter it interactively"
+        )
+        return 1
     perm = Permission(mode=cfg.mode, auto_yes=cfg.auto_yes)
     if cfg.mode == "yolo":
         print(ui._c(C_RED, "⚠ YOLO mode: every tool call runs without approval ⚠"), file=sys.stderr)

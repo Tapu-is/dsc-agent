@@ -193,3 +193,33 @@ def load_config(argv_overrides: Optional[dict] = None) -> Config:
             if v is not None:
                 setattr(c, k, v)
     return c
+
+
+def save_config_value(key: str, value: str) -> bool:
+    """Persist one key=value into ~/.config/dsc/config.toml.
+
+    Replaces an existing line or appends at the end. Returns success.
+    """
+    d = config_dir()
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / "config.toml"
+        lines = []
+        if path.is_file():
+            lines = path.read_text(encoding="utf-8").splitlines()
+        replaced = False
+        out = []
+        for ln in lines:
+            if ln.strip().startswith(f"{key} ") or ln.strip().startswith(f"{key}="):
+                out.append(f'{key} = "{value}"')
+                replaced = True
+            else:
+                out.append(ln)
+        if not replaced:
+            if out and out[-1].strip():
+                out.append("")
+            out.append(f'{key} = "{value}"')
+        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        return True
+    except OSError:
+        return False

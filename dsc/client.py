@@ -120,6 +120,11 @@ class ChatClient:
         on_event: Optional[Callable[[StreamEvent], None]] = None,
     ) -> ChatResult:
         """Send a chat completion request; returns the assembled result."""
+        if not self.cfg.api_key:
+            raise ClientError(
+                "no API key: set DEEPSEEK_API_KEY (or DSC_API_KEY), or api_key "
+                "in ~/.config/dsc/config.toml"
+            )
         body: dict[str, Any] = {
             "model": self.cfg.model,
             "messages": messages,
