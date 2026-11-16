@@ -147,6 +147,17 @@ def _execute(
     args = tc.parse_args()
     start = time.monotonic()
 
+    # plan mode is enforced unconditionally (belt and braces, even in tests)
+    if ctx.get("mode") == "plan" and name in WRITE_TOOLS:
+        out = (
+            f"error: permission denied for {name}: plan mode is read-only. "
+            "Ask the user to switch to default or yolo mode to make changes."
+        )
+        rec = ToolCallRecord(name, args, out, time.monotonic() - start)
+        if on_tool:
+            on_tool(rec)
+        return rec
+
     if check_permission is not None:
         verdict = check_permission(name, args)
         if verdict == "abort":
